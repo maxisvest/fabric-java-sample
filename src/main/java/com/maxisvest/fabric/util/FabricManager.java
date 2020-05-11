@@ -1,23 +1,27 @@
 package com.maxisvest.fabric.util;
 
-import com.maxisvest.fabric.ChaincodeManager;
-import com.maxisvest.fabric.FabricConfig;
-import com.maxisvest.fabric.bean.Chaincode;
-import com.maxisvest.fabric.bean.Orderers;
-import com.maxisvest.fabric.bean.Peers;
+import com.maxisvest.fabric.bean.bo.Chaincode;
+import com.maxisvest.fabric.bean.bo.Orderers;
+import com.maxisvest.fabric.bean.bo.Peers;
+import com.maxisvest.fabric.blockchain.ChaincodeManager;
+import com.maxisvest.fabric.blockchain.FabricConfig;
+import com.maxisvest.fabric.constant.Constant;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.io.FileUtils;
 import org.apache.log4j.Logger;
 import org.hyperledger.fabric.sdk.exception.CryptoException;
 import org.hyperledger.fabric.sdk.exception.InvalidArgumentException;
+import org.hyperledger.fabric.sdk.exception.ProposalException;
 import org.hyperledger.fabric.sdk.exception.TransactionException;
-import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.spec.InvalidKeySpecException;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 
 @Slf4j
 public class FabricManager {
@@ -27,21 +31,21 @@ public class FabricManager {
 
     private static FabricManager instance = null;
 
-    public static FabricManager obtain()
+    public static FabricManager obtain(String chaincodeName, String chaincodeVersion)
             throws CryptoException, InvalidArgumentException, NoSuchAlgorithmException, NoSuchProviderException, InvalidKeySpecException, TransactionException, IOException {
         if (null == instance) {
             synchronized (FabricManager.class) {
                 if (null == instance) {
-                    instance = new FabricManager();
+                    instance = new FabricManager(chaincodeName, chaincodeVersion);
                 }
             }
         }
         return instance;
     }
 
-    private FabricManager()
+    private FabricManager(String chaincodeName, String chaincodeVersion)
             throws CryptoException, InvalidArgumentException, NoSuchAlgorithmException, NoSuchProviderException, InvalidKeySpecException, TransactionException, IOException {
-        FabricConfig config = getConfig();
+        FabricConfig config = getConfig(chaincodeName, chaincodeVersion);
         try {
             manager = new ChaincodeManager(config);
         } catch (Exception e) {
@@ -62,14 +66,16 @@ public class FabricManager {
      * 根据节点作用类型获取节点服务器配置
      *
      * @param //type 服务器作用类型（1、执行；2、查询）
+     * @param chaincodeName
+     * @param chaincodeVersion
      * @return 节点服务器配置
      */
-    private FabricConfig getConfig() {
+    private FabricConfig getConfig(String chaincodeName, String chaincodeVersion) {
         FabricConfig config = new FabricConfig();
         config.setOrderers(getOrderers());
         config.setPeers(getPeers());
-        config.setChaincode(getChaincode("mychannel", "asset",
-                "/Users/admin/IdeaProjects/fabric_java_sdk_v1/src/main/test/fixture/sdkintegration/javacc/sample1", "1.0"));
+        config.setChaincode(getChaincode("mychannel", chaincodeName,
+                "/Users/admin/IdeaProjects/fabric-java-sample/src/main/test/fixture/sdkintegration/javacc/sample1", chaincodeVersion));
         config.setChannelArtifactsPath(getChannleArtifactsPath());
         config.setCryptoConfigPath(getCryptoConfigPath());
         return config;
@@ -96,6 +102,8 @@ public class FabricManager {
         peers.setOrgDomainName("org1.example.com");
         peers.addPeer("peer0.org1.example.com", "peer0.org1.example.com",
                 "grpc://localhost:7051", "grpc://localhost:7053", "http://localhost:7054");
+        peers.addPeer("peer1.org1.example.com", "peer1.org1.example.com",
+                "grpc://localhost:7056", "grpc://localhost:7058", "http://localhost:7054");
         return peers;
     }
 
@@ -149,31 +157,42 @@ public class FabricManager {
 
     public static void main(String[] args) {
         try {
-            ChaincodeManager manager = FabricManager.obtain().getManager();
+            //
+            // List<Object> str2 = Arrays.asList("a", new HashMap<>());
+            // byte[] serialize = serialize(str2);
+            // Object deserialize = deserialize(serialize, Object.class);
 
-            // manager.installChainCode();
-            // manager.instantiateChainCode();
-             String[] str = {"a"};
-             Map<String, String> query = manager.query("get", str);
-             System.out.println(query);
+            ChaincodeManager manager = FabricManager.obtain("asset", Constant.ASSET_CHAINCODE_VERSION).getManager();
 
-         String[] str = {"a", "40"};
-         Map<String, String> result = manager.invoke("set", str);
-         System.out.println(result);
+            manager.installChainCode();
+            manager.instantiateChainCode();
+            // manager.upgradeChaincode();
+            // get(manager);
+            set(manager);
+            // geth(manager);
+            // manager.enrollUser("aaa");
+
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    @Test
-    public void query() {
-        String[] str = {"a"};
-        try {
-            ChaincodeManager manager = FabricManager.obtain().getManager();
-            Map<String, String> query = manager.query("query", str);
-            System.out.println(query);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+    public static void get(ChaincodeManager manager) throws InvalidArgumentException, NoSuchAlgorithmException, IOException, NoSuchProviderException, TransactionException, ProposalException, CryptoException, InvalidKeySpecException {
+        List<Object> str = Arrays.asList("a");
+        Map<String, Object> query = manager.query("get", SerializeUtil.serialize(str));
     }
+
+    public static void geth(ChaincodeManager manager) throws InvalidArgumentException, NoSuchAlgorithmException, IOException, NoSuchProviderException, TransactionException, ProposalException, CryptoException, InvalidKeySpecException {
+        List<Object> str = Arrays.asList("a");
+        Map<String, Object> query = manager.query("geth", SerializeUtil.serialize(str));
+    }
+
+    public static void set(ChaincodeManager manager) throws IOException, NoSuchAlgorithmException, ProposalException, ExecutionException, TimeoutException, InterruptedException, InvalidArgumentException, TransactionException, CryptoException, NoSuchProviderException, InvalidKeySpecException {
+        HashMap<Object, Object> objectObjectHashMap = new HashMap<>();
+        byte[] bytes = FileUtils.readFileToByteArray(new File("/Users/admin/Desktop/HTTP Request.jmx"));
+        objectObjectHashMap.put("file", bytes);
+        List<Object> str = Arrays.asList("a", objectObjectHashMap);
+        Map<String, Object> result = manager.invoke("set", SerializeUtil.serialize(str));
+    }
+
 }

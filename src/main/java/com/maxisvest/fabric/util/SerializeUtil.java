@@ -1,0 +1,37 @@
+package com.maxisvest.fabric.util;
+
+import com.caucho.hessian.io.HessianInput;
+import com.caucho.hessian.io.HessianOutput;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+
+/**
+ * Create by yuyang
+ * 2020/5/8 18:26
+ */
+public class SerializeUtil {
+
+    public static <T> byte[] serialize(T obj){
+        ByteArrayOutputStream os = new ByteArrayOutputStream();
+        HessianOutput ho = new HessianOutput(os);
+        try {
+            ho.writeObject(obj);
+        } catch (IOException e) {
+            throw new IllegalStateException(e.getMessage(), e);
+        }
+        return os.toByteArray();
+    }
+
+    public static <T> T deserialize(byte[] bytes, Class<T> clazz) {
+        ByteArrayInputStream is = new ByteArrayInputStream(bytes);
+        HessianInput hi = new HessianInput(is);
+        try {
+            return (T)hi.readObject();
+        } catch (IOException e) {
+            throw new IllegalStateException(e.getMessage(), e);
+        }
+    }
+
+}
